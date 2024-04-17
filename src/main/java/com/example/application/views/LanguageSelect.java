@@ -1,0 +1,25 @@
+package com.example.application.views;
+
+import com.vaadin.flow.component.select.Select;
+import com.vaadin.flow.i18n.LocaleChangeEvent;
+import com.vaadin.flow.i18n.LocaleChangeObserver;
+
+import java.util.Locale;
+
+public class LanguageSelect extends Select<Locale> implements LocaleChangeObserver {
+    public LanguageSelect() {
+        super();
+        setItems(Locale.ENGLISH, Locale.GERMAN);
+        setItemLabelGenerator(Locale::getDisplayLanguage);
+        addValueChangeListener(event -> {
+            if (event.isFromClient()) {
+                getUI().ifPresent(ui -> ui.setLocale(event.getValue()));
+            }
+        });
+    }
+
+    @Override
+    public void localeChange(LocaleChangeEvent event) {
+        setValue(event.getLocale());
+    }
+}

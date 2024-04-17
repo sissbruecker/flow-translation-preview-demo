@@ -1,12 +1,13 @@
 package com.example.application.views;
 
-import com.example.application.views.empty.EmptyView;
 import com.vaadin.flow.component.applayout.AppLayout;
 import com.vaadin.flow.component.applayout.DrawerToggle;
 import com.vaadin.flow.component.html.Footer;
 import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Header;
+import com.vaadin.flow.component.orderedlayout.FlexComponent;
+import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.Scroller;
 import com.vaadin.flow.component.sidenav.SideNav;
 import com.vaadin.flow.component.sidenav.SideNavItem;
@@ -34,7 +35,15 @@ public class MainLayout extends AppLayout {
         viewTitle = new H2();
         viewTitle.addClassNames(LumoUtility.FontSize.LARGE, LumoUtility.Margin.NONE);
 
-        addToNavbar(true, toggle, viewTitle);
+        var languageSelect = new LanguageSelect();
+
+        var headerLayout = new HorizontalLayout(toggle, viewTitle, languageSelect);
+        headerLayout.setAlignItems(FlexComponent.Alignment.CENTER);
+        headerLayout.expand(viewTitle);
+        headerLayout.setWidthFull();
+        headerLayout.addClassNames(LumoUtility.Margin.Right.MEDIUM);
+
+        addToNavbar(true, headerLayout);
     }
 
     private void addDrawerContent() {
@@ -50,7 +59,7 @@ public class MainLayout extends AppLayout {
     private SideNav createNavigation() {
         SideNav nav = new SideNav();
 
-        nav.addItem(new SideNavItem("Empty", EmptyView.class, LineAwesomeIcon.FILE.create()));
+        nav.addItem(new SideNavItem("Empty", DemoView.class, LineAwesomeIcon.FILE.create()));
 
         return nav;
     }
