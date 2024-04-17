@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -20,19 +21,21 @@ public class PreviewI18nProvider implements I18NProvider {
     private static final String DEFAULT_NAMESPACE = "default";
     private static final String PREVIEW_CONFIG_MAP_LABEL = "vaadin.cc.i18n.translation-preview";
     private static final String DEFAULT_LANGUAGE_TAG = "default";
-
-    private static final List<Locale> locales = List.of(Locale.ENGLISH, Locale.GERMAN);
     private static final Logger logger = LoggerFactory.getLogger(PreviewI18nProvider.class);
 
+    private List<Locale> locales = new ArrayList<>();
     private final Map<String, Map<String, String>> translations = new HashMap<>();
 
     @PostConstruct
     private void initialize() {
         System.out.println("Initializing PreviewI18nProvider");
         var client = new KubernetesClientBuilder().build();
+        var locales = new ArrayList<Locale>();
         client.configMaps().inNamespace(DEFAULT_NAMESPACE).withLabel(PREVIEW_CONFIG_MAP_LABEL).resources().forEach(resource -> {
             var configMap = resource.get();
             var languageTag = configMap.getMetadata().getLabels().get(PREVIEW_CONFIG_MAP_LABEL);
+            var locale = Locale.forLanguageTag(languageTag);
+            locales.add(locale);
 
             // Store initial translations
             updateTranslations(languageTag, configMap);
@@ -52,6 +55,8 @@ public class PreviewI18nProvider implements I18NProvider {
                 }
             });
         });
+
+        this.locales = locales;
     }
 
     private void updateTranslations(String languageTag, ConfigMap configMap) {

@@ -11,6 +11,7 @@ import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.Scroller;
 import com.vaadin.flow.component.sidenav.SideNav;
 import com.vaadin.flow.component.sidenav.SideNavItem;
+import com.vaadin.flow.i18n.I18NProvider;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.theme.lumo.LumoUtility;
 import org.vaadin.lineawesome.LineAwesomeIcon;
@@ -20,9 +21,11 @@ import org.vaadin.lineawesome.LineAwesomeIcon;
  */
 public class MainLayout extends AppLayout {
 
+    private final I18NProvider i18NProvider;
     private H2 viewTitle;
 
-    public MainLayout() {
+    public MainLayout(I18NProvider i18NProvider) {
+        this.i18NProvider = i18NProvider;
         setPrimarySection(Section.DRAWER);
         addDrawerContent();
         addHeaderContent();
@@ -35,7 +38,7 @@ public class MainLayout extends AppLayout {
         viewTitle = new H2();
         viewTitle.addClassNames(LumoUtility.FontSize.LARGE, LumoUtility.Margin.NONE);
 
-        var languageSelect = new LanguageSelect();
+        var languageSelect = new LanguageSelect(i18NProvider);
 
         var headerLayout = new HorizontalLayout(toggle, viewTitle, languageSelect);
         headerLayout.setAlignItems(FlexComponent.Alignment.CENTER);
@@ -59,7 +62,7 @@ public class MainLayout extends AppLayout {
     private SideNav createNavigation() {
         SideNav nav = new SideNav();
 
-        nav.addItem(new SideNavItem("Empty", DemoView.class, LineAwesomeIcon.FILE.create()));
+        nav.addItem(new SideNavItem("Demo", DemoView.class, LineAwesomeIcon.FILE.create()));
 
         return nav;
     }
