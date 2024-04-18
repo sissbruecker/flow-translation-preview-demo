@@ -93,14 +93,24 @@ class PreviewI18nProviderTest {
 
     @Test
     void getTranslation_convertsMessageKeyIntoConfigMapKey() {
-        var messageKey = "(1) Some *important* information!";
-        var configMapKey = "_1__Some__important__information_";
-        var translations = Map.of(configMapKey, "translation");
+        var translations = new HashMap<String, String>();
+
+        var invalidCharactersKey = "(1) Some *important* information!";
+        var invalidCharactersConfigMapKey = "_1__Some__important__information_";
+        translations.put(invalidCharactersConfigMapKey, "invalid characters");
+
+        var tooLongKey = "a".repeat(260);
+        var tooLongConfigMapKey = "a".repeat(253);
+        translations.put(tooLongConfigMapKey, "too long");
+
         var configMap = createConfigMap("en", translations);
         var provider = createProvider(configMap);
 
-        var translation = provider.getTranslation(messageKey, Locale.ENGLISH);
-        assertEquals("translation", translation);
+        var translation = provider.getTranslation(invalidCharactersKey, Locale.ENGLISH);
+        assertEquals("invalid characters", translation);
+
+        translation = provider.getTranslation(tooLongKey, Locale.ENGLISH);
+        assertEquals("too long", translation);
     }
 
     @Test
