@@ -9,11 +9,13 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
@@ -24,9 +26,14 @@ class PreviewI18nProviderTest {
 
     @BeforeEach
     void setUp() {
-        configMapEn = createConfigMap("en", Map.of());
-        configMapDe = createConfigMap("de", Map.of());
-        configMapEnUs = createConfigMap("en-US", Map.of());
+        var translationsEn = Map.of("app.title", "app.title - en");
+        configMapEn = createConfigMap("en", translationsEn, true);
+
+        var translationsDe = Map.of("app.title", "app.title - de");
+        configMapDe = createConfigMap("de", translationsDe);
+
+        var translationsEnUs = Map.of("app.title", "app.title - en-US");
+        configMapEnUs = createConfigMap("en-US", translationsEnUs);
     }
 
     @SuppressWarnings("unchecked")
@@ -66,16 +73,16 @@ class PreviewI18nProviderTest {
 
         locales = provider.getProvidedLocales();
         assertEquals(2, locales.size());
-        assertEquals(Locale.ENGLISH, locales.get(0));
-        assertEquals(Locale.GERMAN, locales.get(1));
+        assertTrue(locales.contains(Locale.ENGLISH));
+        assertTrue(locales.contains(Locale.GERMAN));
 
         provider = createProvider(configMapEn, configMapDe, configMapEnUs);
 
         locales = provider.getProvidedLocales();
         assertEquals(3, locales.size());
-        assertEquals(Locale.ENGLISH, locales.get(0));
-        assertEquals(Locale.GERMAN, locales.get(1));
-        assertEquals(Locale.US, locales.get(2));
+        assertTrue(locales.contains(Locale.ENGLISH));
+        assertTrue(locales.contains(Locale.GERMAN));
+        assertTrue(locales.contains(Locale.US));
     }
 
     @Test
@@ -111,9 +118,45 @@ class PreviewI18nProviderTest {
         assertEquals("Application title", translation);
     }
 
+    @Test
+    void getTranslation_properlyResolvesLocale() {
+        var provider = createProvider(configMapEn, configMapDe, configMapEnUs);
+
+        // Exact match
+        var translation = provider.getTranslation("app.title", Locale.US);
+        assertEquals("app.title - en-US", translation);
+
+        translation = provider.getTranslation("app.title", Locale.GERMAN);
+        assertEquals("app.title - de", translation);
+
+        // Fall back to same language
+        translation = provider.getTranslation("app.title", Locale.forLanguageTag("de-DE"));
+        assertEquals("app.title - de", translation);
+
+        translation = provider.getTranslation("app.title", Locale.forLanguageTag("en-GB"));
+        assertEquals("app.title - en", translation);
+
+        // Fall back to default language
+        translation = provider.getTranslation("app.title", Locale.FRANCE);
+        assertEquals("app.title - en", translation);
+
+        translation = provider.getTranslation("app.title", Locale.CHINESE);
+        assertEquals("app.title - en", translation);
+
+    }
+
     private ConfigMap createConfigMap(String languageTag, Map<String, String> translations) {
+        return createConfigMap(languageTag, translations, false);
+    }
+
+    private ConfigMap createConfigMap(String languageTag, Map<String, String> translations, boolean isDefault) {
         var metadata = new ObjectMeta();
-        metadata.setLabels(Map.of(PreviewI18nProvider.PREVIEW_CONFIG_MAP_LABEL, languageTag));
+        var labels = new HashMap<String, String>();
+        labels.put(PreviewI18nProvider.PREVIEW_LANGUAGE_TAG_LABEL, languageTag);
+        if (isDefault) {
+            labels.put(PreviewI18nProvider.PREVIEW_DEFAULT_LANGUAGE_LABEL, "true");
+        }
+        metadata.setLabels(labels);
 
         var configMap = new ConfigMap();
         configMap.setMetadata(metadata);

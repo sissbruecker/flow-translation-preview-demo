@@ -11,44 +11,36 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 @Service
 public class PreviewI18nProvider implements I18NProvider {
     static final String DEFAULT_NAMESPACE = "default";
-    static final String PREVIEW_CONFIG_MAP_LABEL = "vaadin.cc.i18n.translation-preview";
-    static final String DEFAULT_LANGUAGE_TAG = "default";
+    static final String PREVIEW_LANGUAGE_TAG_LABEL = "vaadin.cc.i18n.translation-preview.language-tag";
+    static final String PREVIEW_DEFAULT_LANGUAGE_LABEL = "vaadin.cc.i18n.translation-preview.default-language";
     static final Logger logger = LoggerFactory.getLogger(PreviewI18nProvider.class);
 
-    private List<Locale> locales = new ArrayList<>();
-    private final Map<String, Map<String, String>> translations = new HashMap<>();
+    private final Map<Locale, PreviewLanguage> discoveredLanguages = new HashMap<>();
 
     @PostConstruct
     void initialize() {
         var resources = getResources();
-        var locales = new ArrayList<Locale>();
         resources.forEach(resource -> {
             var configMap = resource.get();
-            var languageTag = detectLanguageTag(configMap);
-            var locale = Locale.forLanguageTag(languageTag);
-            locales.add(locale);
 
             // Store initial translations
-            updateTranslations(languageTag, configMap);
-            logger.info("Found preview translations for language: {}", languageTag);
+            updateTranslations(configMap);
 
             // Watch for changes
             resource.watch(new Watcher<>() {
                 @Override
                 public void eventReceived(Action action, ConfigMap updatedConfigMap) {
-                    var languageTag = detectLanguageTag(configMap);
-                    updateTranslations(languageTag, updatedConfigMap);
-                    logger.info("Updated preview translations for language: {}", languageTag);
+                    updateTranslations(updatedConfigMap);
                 }
 
                 @Override
@@ -56,32 +48,44 @@ public class PreviewI18nProvider implements I18NProvider {
                 }
             });
         });
-
-        this.locales = locales;
     }
 
     Stream<Resource<ConfigMap>> getResources() {
         var client = new KubernetesClientBuilder().build();
-        return client.configMaps().inNamespace(DEFAULT_NAMESPACE).withLabel(PREVIEW_CONFIG_MAP_LABEL).resources();
+        return client.configMaps().inNamespace(DEFAULT_NAMESPACE).withLabel(PREVIEW_LANGUAGE_TAG_LABEL).resources();
     }
 
-    private void updateTranslations(String languageTag, ConfigMap configMap) {
+    private void updateTranslations(ConfigMap configMap) {
+        var locale = detectLocale(configMap);
+        var isUpdate = discoveredLanguages.containsKey(locale);
+
         var translations = configMap.getData();
-        this.translations.put(languageTag, translations);
+        var isDefault = isDefaultLanguage(configMap);
+        var previewLanguage = new PreviewLanguage(locale, translations, isDefault);
+
+        this.discoveredLanguages.put(locale, previewLanguage);
+
+        if (isUpdate) {
+            logger.info("Updated preview translations for locale: {}", locale);
+        } else {
+            logger.info("Found preview translations for locale: {}", locale);
+        }
     }
 
-    private Map<String, String> resolveTranslations(Locale locale) {
-        var languageTag = locale.toLanguageTag();
+    private Optional<PreviewLanguage> resolveLanguage(Locale locale) {
         // Look for specified locale first
-        if (translations.containsKey(languageTag)) {
-            return translations.get(languageTag);
-        }
-        // If not found, look for the default language
-        if (translations.containsKey(DEFAULT_LANGUAGE_TAG)) {
-            return translations.get(DEFAULT_LANGUAGE_TAG);
-        }
-        // If no translations are found, return an empty map
-        return Map.of();
+        var language = Optional.ofNullable(discoveredLanguages.get(locale));
+
+        // Use a locale with the same language as a fallback
+        language = language.or(() -> discoveredLanguages.keySet().stream()
+                .filter(l -> l.getLanguage().equals(locale.getLanguage()))
+                .findFirst()
+                .map(discoveredLanguages::get));
+
+        // Use the default language as a last resort
+        return language.or(() -> discoveredLanguages.values().stream()
+                .filter(PreviewLanguage::isDefault)
+                .findFirst());
     }
 
     /**
@@ -98,28 +102,39 @@ public class PreviewI18nProvider implements I18NProvider {
         return messageKey.substring(0, Math.min(messageKey.length(), 253));
     }
 
-    private String detectLanguageTag(ConfigMap configMap) {
-        var languageTag = configMap.getMetadata().getLabels().get(PREVIEW_CONFIG_MAP_LABEL);
+    private Locale detectLocale(ConfigMap configMap) {
+        var languageTag = configMap.getMetadata().getLabels().get(PREVIEW_LANGUAGE_TAG_LABEL);
 
         if (languageTag == null || languageTag.isEmpty()) {
             logger.warn("ConfigMap {} does not have a language tag label", configMap.getMetadata().getName());
-            return DEFAULT_LANGUAGE_TAG;
+            return Locale.getDefault();
         }
 
         // Make sure the language tag is in the correct format
-        return languageTag.replaceAll("_", "-");
+        var sanitizedLanguageTag = languageTag.replaceAll("_", "-");
+
+        return Locale.forLanguageTag(sanitizedLanguageTag);
+    }
+
+    private boolean isDefaultLanguage(ConfigMap configMap) {
+        return configMap.getMetadata().getLabels().containsKey(PREVIEW_DEFAULT_LANGUAGE_LABEL);
     }
 
     @Override
     public List<Locale> getProvidedLocales() {
-        return locales;
+        return discoveredLanguages.keySet().stream().toList();
     }
 
     @Override
     public String getTranslation(String messageKey, Locale locale, Object... objects) {
-        var translations = resolveTranslations(locale);
+        var language = resolveLanguage(locale);
         var configMapKey = generateConfigMapKey(messageKey);
 
-        return translations.getOrDefault(configMapKey, messageKey);
+        return language.map(PreviewLanguage::translations)
+                .map(translations -> translations.get(configMapKey))
+                .orElse(messageKey);
+    }
+
+    private record PreviewLanguage(Locale locale, Map<String, String> translations, boolean isDefault) {
     }
 }
