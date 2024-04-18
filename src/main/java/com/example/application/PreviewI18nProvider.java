@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.text.MessageFormat;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -72,6 +73,24 @@ public class PreviewI18nProvider implements I18NProvider {
         }
     }
 
+    private Locale detectLocale(ConfigMap configMap) {
+        var languageTag = configMap.getMetadata().getLabels().get(PREVIEW_LANGUAGE_TAG_LABEL);
+
+        if (languageTag == null || languageTag.isEmpty()) {
+            logger.warn("ConfigMap {} does not have a language tag label", configMap.getMetadata().getName());
+            return Locale.getDefault();
+        }
+
+        // Make sure the language tag is in the correct format
+        var sanitizedLanguageTag = languageTag.replaceAll("_", "-");
+
+        return Locale.forLanguageTag(sanitizedLanguageTag);
+    }
+
+    private boolean isDefaultLanguage(ConfigMap configMap) {
+        return configMap.getMetadata().getLabels().containsKey(PREVIEW_DEFAULT_LANGUAGE_LABEL);
+    }
+
     private Optional<PreviewLanguage> resolveLanguage(Locale locale) {
         // Look for specified locale first
         var language = Optional.ofNullable(discoveredLanguages.get(locale));
@@ -102,37 +121,30 @@ public class PreviewI18nProvider implements I18NProvider {
         return messageKey.substring(0, Math.min(messageKey.length(), 253));
     }
 
-    private Locale detectLocale(ConfigMap configMap) {
-        var languageTag = configMap.getMetadata().getLabels().get(PREVIEW_LANGUAGE_TAG_LABEL);
-
-        if (languageTag == null || languageTag.isEmpty()) {
-            logger.warn("ConfigMap {} does not have a language tag label", configMap.getMetadata().getName());
-            return Locale.getDefault();
-        }
-
-        // Make sure the language tag is in the correct format
-        var sanitizedLanguageTag = languageTag.replaceAll("_", "-");
-
-        return Locale.forLanguageTag(sanitizedLanguageTag);
-    }
-
-    private boolean isDefaultLanguage(ConfigMap configMap) {
-        return configMap.getMetadata().getLabels().containsKey(PREVIEW_DEFAULT_LANGUAGE_LABEL);
-    }
-
     @Override
     public List<Locale> getProvidedLocales() {
         return discoveredLanguages.keySet().stream().toList();
     }
 
     @Override
-    public String getTranslation(String messageKey, Locale locale, Object... objects) {
-        var language = resolveLanguage(locale);
-        var configMapKey = generateConfigMapKey(messageKey);
+    public String getTranslation(String messageKey, Locale locale, Object... params) {
+        var maybeLanguage = resolveLanguage(locale);
+        if (maybeLanguage.isEmpty()) {
+            return messageKey;
+        }
 
-        return language.map(PreviewLanguage::translations)
-                .map(translations -> translations.get(configMapKey))
-                .orElse(messageKey);
+        var configMapKey = generateConfigMapKey(messageKey);
+        var language = maybeLanguage.get();
+        var translation = language.translations().get(configMapKey);
+
+        if (translation == null) {
+            return messageKey;
+        }
+
+        if (params.length > 0) {
+            translation = new MessageFormat(translation, language.locale).format(params);
+        }
+        return translation;
     }
 
     private record PreviewLanguage(Locale locale, Map<String, String> translations, boolean isDefault) {
