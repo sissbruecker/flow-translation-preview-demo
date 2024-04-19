@@ -3,21 +3,18 @@ package com.example.application;
 import io.fabric8.kubernetes.api.model.ConfigMap;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.client.Watcher;
-import io.fabric8.kubernetes.client.dsl.Resource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Mockito;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 class PreviewI18nProviderTest {
     private ConfigMap configMapEn;
@@ -45,27 +42,36 @@ class PreviewI18nProviderTest {
     @SuppressWarnings("unchecked")
     @Test
     void initialize_watchesForConfigMapChanges() {
-        var initialTranslations = Map.of("app.title", "Application title");
-        var configMap = createConfigMap("en", initialTranslations);
-        var resource = (Resource<ConfigMap>) Mockito.mock(Resource.class);
-        when(resource.get()).thenReturn(configMap);
-
-        var provider = spy(new PreviewI18nProvider());
-        when(provider.getResources()).thenReturn(Stream.of(resource));
-        provider.initialize();
+        // Start with no translations
+        var provider = createProvider();
+        var watcherCaptor = ArgumentCaptor.forClass(Watcher.class);
+        verify(provider, times(1)).watchResources(watcherCaptor.capture());
+        var watcher = watcherCaptor.getValue();
 
         var translation = provider.getTranslation("app.title", Locale.ENGLISH);
-        assertEquals("Application title", translation);
+        assertEquals("app.title", translation);
 
-        var watcherCaptor = ArgumentCaptor.forClass(Watcher.class);
-        Mockito.verify(resource).watch(watcherCaptor.capture());
-
-        var updatedTranslations = Map.of("app.title", "Updated title");
-        var updatedConfigMap = createConfigMap("en", updatedTranslations);
-        watcherCaptor.getValue().eventReceived(Watcher.Action.MODIFIED, updatedConfigMap);
+        // Add translations
+        var translations = Map.of("app.title", "Application title");
+        var configMap = createConfigMap("en", translations);
+        watcher.eventReceived(Watcher.Action.ADDED, configMap);
 
         translation = provider.getTranslation("app.title", Locale.ENGLISH);
-        assertEquals("Updated title", translation);
+        assertEquals("Application title", translation);
+
+        // Update translations
+        translations = Map.of("app.title", "New title");
+        configMap = createConfigMap("en", translations);
+        watcher.eventReceived(Watcher.Action.MODIFIED, configMap);
+
+        translation = provider.getTranslation("app.title", Locale.ENGLISH);
+        assertEquals("New title", translation);
+
+        // Remove translations
+        watcher.eventReceived(Watcher.Action.DELETED, configMap);
+
+        translation = provider.getTranslation("app.title", Locale.ENGLISH);
+        assertEquals("app.title", translation);
     }
 
     @Test
@@ -202,13 +208,13 @@ class PreviewI18nProviderTest {
     @SuppressWarnings("unchecked")
     private PreviewI18nProvider createProvider(ConfigMap... configMaps) {
         var provider = spy(new PreviewI18nProvider());
-        var resources = Stream.of(configMaps).map(configMap -> {
-            var resource = (Resource<ConfigMap>) Mockito.mock(Resource.class);
-            when(resource.get()).thenReturn(configMap);
-            return resource;
-        });
-        when(provider.getResources()).thenReturn(resources);
+        var watcherCaptor = ArgumentCaptor.forClass(Watcher.class);
+        doAnswer(invocation -> {
+            // Ignore, just disable the original implementation
+            return null;
+        }).when(provider).watchResources(watcherCaptor.capture());
         provider.initialize();
+        Arrays.stream(configMaps).forEach(configMap -> watcherCaptor.getValue().eventReceived(Watcher.Action.ADDED, configMap));
         return provider;
     }
 }

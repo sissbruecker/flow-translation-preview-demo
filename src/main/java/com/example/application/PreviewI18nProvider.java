@@ -5,7 +5,6 @@ import io.fabric8.kubernetes.api.model.ConfigMap;
 import io.fabric8.kubernetes.client.KubernetesClientBuilder;
 import io.fabric8.kubernetes.client.Watcher;
 import io.fabric8.kubernetes.client.WatcherException;
-import io.fabric8.kubernetes.client.dsl.Resource;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,7 +16,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Stream;
 
 @Service
 public class PreviewI18nProvider implements I18NProvider {
@@ -30,33 +28,27 @@ public class PreviewI18nProvider implements I18NProvider {
 
     @PostConstruct
     void initialize() {
-        var resources = getResources();
-        resources.forEach(resource -> {
-            var configMap = resource.get();
-
-            // Store initial translations
-            updateTranslations(configMap);
-
-            // Watch for changes
-            resource.watch(new Watcher<>() {
-                @Override
-                public void eventReceived(Action action, ConfigMap updatedConfigMap) {
-                    updateTranslations(updatedConfigMap);
+        watchResources(new Watcher<>() {
+            @Override
+            public void eventReceived(Action action, ConfigMap configMap) {
+                switch (action) {
+                    case ADDED, MODIFIED -> addOrUpdateTranslations(configMap);
+                    case DELETED -> removeTranslations(configMap);
                 }
+            }
 
-                @Override
-                public void onClose(WatcherException cause) {
-                }
-            });
+            @Override
+            public void onClose(WatcherException cause) {
+            }
         });
     }
 
-    Stream<Resource<ConfigMap>> getResources() {
+    void watchResources(Watcher<ConfigMap> watcher) {
         var client = new KubernetesClientBuilder().build();
-        return client.configMaps().inNamespace(DEFAULT_NAMESPACE).withLabel(PREVIEW_LANGUAGE_TAG_LABEL).resources();
+        client.configMaps().inNamespace(DEFAULT_NAMESPACE).withLabel(PREVIEW_LANGUAGE_TAG_LABEL).watch(watcher);
     }
 
-    private void updateTranslations(ConfigMap configMap) {
+    private void addOrUpdateTranslations(ConfigMap configMap) {
         var locale = detectLocale(configMap);
         var isUpdate = discoveredLanguages.containsKey(locale);
 
@@ -71,6 +63,12 @@ public class PreviewI18nProvider implements I18NProvider {
         } else {
             logger.info("Found preview translations for locale: {}", locale);
         }
+    }
+
+    private void removeTranslations(ConfigMap configMap) {
+        var locale = detectLocale(configMap);
+        discoveredLanguages.remove(locale);
+        logger.info("Removed preview translations for locale: {}", locale);
     }
 
     private Locale detectLocale(ConfigMap configMap) {
