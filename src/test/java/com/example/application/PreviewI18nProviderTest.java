@@ -193,10 +193,9 @@ class PreviewI18nProviderTest {
     private ConfigMap createConfigMap(String languageTag, Map<String, String> translations, boolean isDefault) {
         var metadata = new ObjectMeta();
         var labels = new HashMap<String, String>();
+        labels.put(PreviewI18nProvider.PREVIEW_MARKER_LABEL, "");
         labels.put(PreviewI18nProvider.PREVIEW_LANGUAGE_TAG_LABEL, languageTag);
-        if (isDefault) {
-            labels.put(PreviewI18nProvider.PREVIEW_DEFAULT_LANGUAGE_LABEL, "true");
-        }
+        labels.put(PreviewI18nProvider.PREVIEW_DEFAULT_LANGUAGE_LABEL, String.valueOf(isDefault));
         metadata.setLabels(labels);
 
         var configMap = new ConfigMap();

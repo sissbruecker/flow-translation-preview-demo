@@ -14,7 +14,11 @@ public class LanguageSelect extends Select<Locale> implements LocaleChangeObserv
         setItemLabelGenerator(Locale::getDisplayLanguage);
         addValueChangeListener(event -> {
             if (event.isFromClient()) {
-                getUI().ifPresent(ui -> ui.setLocale(event.getValue()));
+                getUI().ifPresent(ui -> {
+                    ui.setLocale(event.getValue());
+                    ui.getSession().setLocale(event.getValue());
+                    ui.getPage().reload();
+                });
             }
         });
     }

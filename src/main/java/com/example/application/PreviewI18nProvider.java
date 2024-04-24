@@ -20,6 +20,7 @@ import java.util.Optional;
 @Service
 public class PreviewI18nProvider implements I18NProvider {
     static final String DEFAULT_NAMESPACE = "default";
+    static final String PREVIEW_MARKER_LABEL = "vaadin.cc.i18n.translation-preview";
     static final String PREVIEW_LANGUAGE_TAG_LABEL = "vaadin.cc.i18n.translation-preview.language-tag";
     static final String PREVIEW_DEFAULT_LANGUAGE_LABEL = "vaadin.cc.i18n.translation-preview.default-language";
     static final Logger logger = LoggerFactory.getLogger(PreviewI18nProvider.class);
@@ -45,7 +46,7 @@ public class PreviewI18nProvider implements I18NProvider {
 
     void watchResources(Watcher<ConfigMap> watcher) {
         var client = new KubernetesClientBuilder().build();
-        client.configMaps().inNamespace(DEFAULT_NAMESPACE).withLabel(PREVIEW_LANGUAGE_TAG_LABEL).watch(watcher);
+        client.configMaps().inNamespace(DEFAULT_NAMESPACE).withLabel(PREVIEW_MARKER_LABEL).watch(watcher);
     }
 
     private void addOrUpdateTranslations(ConfigMap configMap) {
@@ -86,7 +87,7 @@ public class PreviewI18nProvider implements I18NProvider {
     }
 
     private boolean isDefaultLanguage(ConfigMap configMap) {
-        return configMap.getMetadata().getLabels().containsKey(PREVIEW_DEFAULT_LANGUAGE_LABEL);
+        return String.valueOf(true).equals(configMap.getMetadata().getLabels().get(PREVIEW_DEFAULT_LANGUAGE_LABEL));
     }
 
     private Optional<PreviewLanguage> resolveLanguage(Locale locale) {

@@ -4,8 +4,8 @@
     <modelVersion>4.0.0</modelVersion>
     <!-- Project from https://start.vaadin.com/project/5f3750bf-88d6-406d-93a0-f6596cc03cf3 -->
     <groupId>com.example.application</groupId>
-    <artifactId>my-app</artifactId>
-    <name>my-app</name>
+    <artifactId>translation-preview-demo</artifactId>
+    <name>Translation Preview Demo</name>
     <version>1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
