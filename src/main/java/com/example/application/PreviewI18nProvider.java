@@ -45,8 +45,12 @@ public class PreviewI18nProvider implements I18NProvider {
     }
 
     void watchResources(Watcher<ConfigMap> watcher) {
-        var client = new KubernetesClientBuilder().build();
-        client.configMaps().inNamespace(DEFAULT_NAMESPACE).withLabel(PREVIEW_MARKER_LABEL).watch(watcher);
+        try {
+            var client = new KubernetesClientBuilder().build();
+            client.configMaps().inNamespace(DEFAULT_NAMESPACE).withLabel(PREVIEW_MARKER_LABEL).watch(watcher);
+        } catch (Exception e) {
+            logger.error("Failed to watch for preview translations", e);
+        }
     }
 
     private void addOrUpdateTranslations(ConfigMap configMap) {
